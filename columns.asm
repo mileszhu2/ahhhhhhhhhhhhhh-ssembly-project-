@@ -37,6 +37,10 @@ colors: .word 0x00ff0000 # red
 # Mutable Data
 ##############################################################################
 column: .word 0:3
+next_column: .word 0:3
+current_pos: .word 0x10008004 # position logs the block on top of the column's top block
+previous_pos: .word 0x10008004
+col_hitbox: .word 0x10008184 # the bottom block of the column
 
 ##############################################################################
 # Code
@@ -83,7 +87,6 @@ main:
     
     # Start the game
     jal get_random_column
-    sw $ra, 0($sp)
     jal game_loop
     li $v0, 10                      # terminate the program gracefully
     syscall
@@ -136,10 +139,78 @@ main:
 
 game_loop:
     # TODO check if should end the game
+    # New column turn setup
+    sw $ra, 0($sp)
+    la $t3, current_pos
+    li $t1, 0x10008004
+    sw $t1, 0($t3) # reset current_pos to top-left of playing map
+    jal transfer_next_to_col
     jal spawn_column # Spawn previously generated column
     jal get_random_column # Generate next column and display
-    # 1a. Check if key has been pressed
-    # 1b. Check which key has been pressed
+    la $s0, column
+    # Check if key has been pressed
+    key_loop:
+	li $v0, 32
+	li $a0, 1
+	syscall
+
+    lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
+    lw $t8, 0($t0)                  # Load first word from keyboard
+    beq $t8, 1, keyboard_input      # If first word 1, key is pressed
+    b key_loop
+
+    # Check which key has been pressed
+    keyboard_input:                     # A key is pressed
+        lw $a0, 4($t0)                  # Load second word from keyboard
+        beq $a0, 0x71, respond_to_Q     # Check if the key q was pressed
+        beq $a0, 0x77, respond_to_W     # Check if the key w was pressed
+        beq $a0, 0x61, respond_to_A     # Check if the key a was pressed
+        beq $a0, 0x73, respond_to_S     # Check if the key s was pressed
+        beq $a0, 0x64, respond_to_D     # Check if the key d was pressed
+        li $v0, 1                       # ask system to print $a0
+        syscall
+        b key_loop
+    
+    respond_to_Q:
+    	li $v0, 10                      # Quit gracefully
+    	syscall
+    	
+    respond_to_W:
+    	li $t1, 0
+        li $t2, 3
+        lw $t4, 8($s0)
+        swap_loop:
+        beq $t1, $t2, swap_end
+        sll $t6, $t1, 2
+        add $t5, $s0, $t6
+        lw $a0, 0($t5)
+        sw $t4, 0($t5)
+        move $t4, $a0
+        addi $t1, $t1, 1
+        j swap_loop
+        swap_end:
+        jal spawn_column
+        j key_loop
+        
+    respond_to_A:
+    	lw $t1, current_pos # param for collision_checker
+    	lw $t2, col_hitbox # param for collision_checker
+    	li $a0, -4 # offset to move left (param for collision_checker)
+    	jal collision_checker # check collision and update location if applicable
+    	beq $a1, 1, detected
+    	detected:
+    	j key_loop
+    respond_to_S:
+    	li $v0, 10                      # Quit gracefully
+    	syscall
+    respond_to_D:
+    	lw $t1, current_pos # param for collision_checker
+    	lw $t2, col_hitbox # param for collision_checker
+    	li $a0, 4 # offset to move right (param for collision_checker)
+    	jal collision_checker # check collision and update location if applicable
+    	beq $a1, 1, detected
+    	
+    
     # 2a. Check for collisions
 	# 2b. Update locations (capsules)
 	# 3. Draw the screen
@@ -153,15 +224,15 @@ game_loop:
 
 get_random_column:
     # Random seed (system time)
-    li $v0, 30 
-    syscall # gets system time $a0 = low 32 bits, $a1 = high 32 bits
-    move $a1, $a0       # Move low 32 bits of time into $a1 (the seed)
-    li $a0, 0           # Set Generator ID to 0
-    li $v0, 40          # Syscall 40: Set Seed
-    syscall
+    # li $v0, 30 
+    # syscall # gets system time $a0 = low 32 bits, $a1 = high 32 bits
+    # move $a1, $a0       # Move low 32 bits of time into $a1 (the seed)
+    # li $a0, 0           # Set Generator ID to 0
+    # li $v0, 40          # Syscall 40: Set Seed
+    # syscall
 
     # Generate color combo
-    la $s0, column
+    la $s0, next_column
     la $t9, colors
     addi $t6, $t0, 160
     li $t1, 0
@@ -187,17 +258,59 @@ get_random_column:
     jr $ra                          # return statement
     
 spawn_column:
+    la $s0, column
+    li $a0, 0x00000000 # black
     li $t1, 0
     li $t2, 3
-    addi $t3, $t0, 4 # column top + 1 block
+    lw $t3, current_pos
+    lw $t7, previous_pos
     spawn_loop:
     beq $t1, $t2, spawn_end
     sll $t6, $t1, 2
-    add $t5, $s0, $t6
-    lw $t4, 0($t5)
-    addi $t3, $t3, 128
-    sw $t4, 0($t3)
-    addi $t1, $t1, 1
+    add $t5, $s0, $t6 # color index in colors
+    lw $t4, 0($t5) # get the color
+    addi $t3, $t3, 128 # color in position
+    addi $t7, $t7, 128 # color out position
+    sw $a0, 0($t7) # color out
+    sw $t4, 0($t3) # color in
+    addi $t1, $t1, 1 # increment
     j spawn_loop
     spawn_end:
+    lw $t3, current_pos
     jr $ra
+    
+transfer_next_to_col:
+    la $t1, next_column
+    la $t2, column
+    
+    # Copy all 3 elements without loop
+    lw $t3, 0($t1)
+    sw $t3, 0($t2)
+    
+    lw $t3, 4($t1)
+    sw $t3, 4($t2)
+    
+    lw $t3, 8($t1)
+    sw $t3, 8($t2)
+    jr $ra
+    
+collision_checker: 
+# Parameters:
+# $t1 is the current_pos of the column
+# $t2 is the col_hitbox (used to check collision)
+# $a0 to determine whether the intended move is left or right
+    li $a1, 0 # black
+    add $t3, $t2, $a0 # location to the right or left of the hitbox
+    lw $t5, 0($t3) # color right or left of hitbox
+    beq $t5, $a1, no_collision
+    li $a1, 1 # to indicate collision
+    jr $ra
+    no_collision:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    la $t2 current_pos
+    add $t1, $t1, $a0
+    sw $t1, 0($t2) # update current_pos for spawn_column
+    jal spawn_column
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
