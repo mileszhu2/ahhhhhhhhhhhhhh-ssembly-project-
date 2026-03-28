@@ -425,14 +425,23 @@ connection_finder:
         li $t2, 0 # index 
         li $t9, 0 # black
         paint_black:
+            beq $t2, 336, paint_black_done # 84*4 = 336
+            add $t4, $t1, $t2
+            lw $t5, 0($t4) # get the location
+            beq $t5, 0, paint_black_done # no more to search
+            sw $t9, 0($t5) # paint black
+            jal sleep
+            add $t2, $t2, 4 # increment
+            j paint_black
+        paint_black_done:
+            li $t2, 0 # reset the index for drop_loop
+        drop_loop:
             beq $t2, 336, do_we_continue # 84*4 = 336
             add $t4, $t1, $t2
             lw $t5, 0($t4) # get the location
             beq $t5, 0, do_we_continue # no more to search
-            sw $t9, 0($t5) # paint black
-            jal sleep
             move $t7, $t5
-            drop_loop:
+            drop_loop_up:
                 # check current column (loop bottom up till see black or grey)
                 addi $t6, $t7, -128 # move up previous $t7
                 lw $t4, 0($t6) # target color
@@ -442,9 +451,10 @@ connection_finder:
                 sw $t4, 0($t7) # color current black pixel the above color (which is not black)
                 jal sleep
                 move $t7, $t6 # $t6 is the previous now
-                j drop_loop
+                j drop_loop_up
             drop_exit:
             move $t7, $t6
+            addi $t7, $t7, -256 # adjust to current_pos like in land_locations (already -128 in the drop_loop_up)
             la $v0, land_locations
             sub $t6, $t5, $t0 # $t6 = $t5 - $t0
             addi $t6, $t6, -4 # substract 4
@@ -452,14 +462,17 @@ connection_finder:
             sll $t4, $t4, 7 # multiply $t4 by 128
             sub $t6, $t6, $t4 # $t6 - $t4 is the remainder and also the index
             add $v0, $v0, $t6 # land_locations index
+            lw $t4, 0($v0) # load the current land_location
+            ble $t7, $t4, skip_ll
             sw $t7, 0($v0) # update land_locations
+            skip_ll:
             add $v1, $t8, $t6 # candidates location
             lw $t7, 0($v1)
             ble $t5, $t7, skip_replace
             sw $t5, 0($v1)
             skip_replace:
             add $t2, $t2, 4 # increment
-            j paint_black
+            j drop_loop
         do_we_continue:
             li $t1, 0 # index
             li $t4, 0 # counter
@@ -567,7 +580,6 @@ flood_fill:
     bne $t7, $t4, end_flood # if no more of same color in direction $a0
     # else
     jal duplicate_check
-    add $v1, $v1, 4 # increment candidates pointer
     add $t6, $t6, $a0 # move one step in $a0 direction
     jal flood_fill # keep searching
     end_flood:
@@ -591,6 +603,7 @@ duplicate_check:
         j duplicate_check_loop
     no_duplicate:
         sw $t6, 0($v1) # add to candidates
+        add $v1, $v1, 4 # increment candidates pointer
         addi $v0, $v0, 1 # increase connection length by 1
     done_duplicate_check:
     jr $ra
