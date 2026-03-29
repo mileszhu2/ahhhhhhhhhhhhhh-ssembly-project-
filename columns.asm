@@ -37,6 +37,12 @@ colors: .word 0x00ff0000 # red
 # Mutable Data
 ##############################################################################
 column: .word 0:3
+next_column: .word 0:3
+current_pos: .word 0x10008004 # position logs the block on top of the column's top block
+current_x: .word 0x00000000 # index of land_locations that corresponds to the current_pos of column
+previous_pos: .word 0x10008004
+col_hitbox: .word 0x10008184 # the bottom block of the column
+land_locations: .word 0:6 
 
 ##############################################################################
 # Code
@@ -81,12 +87,28 @@ main:
     addi $a2, $zero, 8          # set the length of the line to 8
     jal hline_draw              # calls the line drawing function
     
+    # Initialize columns:
+    la $s0, next_column
+    la $s1, column
+    
+    # Initialize land locations:
+    li $a1, 0x00ff0000
+    la $t9, land_locations
+    li $t1, 0
+    li $t2, 6
+    li $a0, 0x10008580
+    llloop:
+    beq $t1, $t2, end_llloop
+    addi $a0, $a0, 4
+    sll $t3, $t1, 2
+    add $t8, $t9, $t3 
+    sw $a0, 0($t8)
+    addi $t1, $t1, 1
+    j llloop
+    end_llloop:
     # Start the game
     jal get_random_column
-    sw $ra, 0($sp)
     jal game_loop
-    li $v0, 10                      # terminate the program gracefully
-    syscall
     
     ###
     ###  Code for drawing a horizontal/vertical line.
@@ -135,33 +157,106 @@ main:
     jr $ra                          # return statement
 
 game_loop:
-    # TODO check if should end the game
+    # New column turn setup
+    jal transfer_next_to_col
     jal spawn_column # Spawn previously generated column
     jal get_random_column # Generate next column and display
-    # 1a. Check if key has been pressed
-    # 1b. Check which key has been pressed
+    
+    # Check if should end the game
+    lw $t2, current_pos # find the current_pos
+    ble $t2, $t0, end_game # checks if current_pos less than the top left corner $t0
+    
+    # Check if key has been pressed
+    key_loop:
+	li $v0, 32
+	li $a0, 1
+	syscall
+
+    lw $s2, ADDR_KBRD               # $t0 = base address for keyboard
+    lw $t8, 0($s2)                  # Load first word from keyboard
+    beq $t8, 1, keyboard_input      # If first word 1, key is pressed
+    b key_loop
+
+    # Check which key has been pressed
+    keyboard_input:                     # A key is pressed
+        lw $a0, 4($s2)                  # Load second word from keyboard
+        beq $a0, 0x71, respond_to_Q     # Check if the key q was pressed
+        beq $a0, 0x77, respond_to_W     # Check if the key w was pressed
+        beq $a0, 0x61, respond_to_A     # Check if the key a was pressed
+        beq $a0, 0x73, respond_to_S     # Check if the key s was pressed
+        beq $a0, 0x64, respond_to_D     # Check if the key d was pressed
+        li $v0, 1                       # ask system to print $a0
+        syscall
+        b key_loop
+    
+    respond_to_Q:
+    	li $v0, 10                      # Quit gracefully
+    	syscall
+    	
+    respond_to_W:
+    	li $t1, 0
+        li $t2, 3
+        lw $t4, 8($s1)
+        swap_loop:
+        beq $t1, $t2, swap_end
+        sll $t6, $t1, 2
+        add $t5, $s1, $t6
+        lw $a0, 0($t5)
+        sw $t4, 0($t5)
+        move $t4, $a0
+        addi $t1, $t1, 1
+        j swap_loop
+        swap_end:
+        jal spawn_column
+        jal sleep
+        j key_loop
+    respond_to_A:
+    	lw $t1, current_pos # param for collision_checker
+    	lw $t2, col_hitbox # param for collision_checker
+    	li $a0, -4 # offset to move left (param for collision_checker)
+    	jal collision_checker # check collision and update location if applicable
+    	jal sleep
+    	j key_loop
+    respond_to_S: 
+        # This is done assuming the game over check at the start of game_loop actually works
+        # This implies that in this postion, the down move is valid and won't lose you the game
+        # well it actually only checks the leftmost land_location but I'm counting on A and D moves to take care of the other locations
+    	la $t1, current_pos 
+    	la $t3, land_locations
+    	lw $t4, current_x
+    	sll $t4, $t4, 2 # multiply by 4
+    	add $t5, $t3, $t4 # the location in land_locations to search
+    	lw $t6, 0($t5) # the lowest possible current_pos in the current_x
+        sw $t6, 0($t1) # update current_pos for spawn_column
+        lw $t2, current_pos
+        addi $t2, $t2, -384 # find the new lowest current_pos
+        sw $t2, 0($t5) # update land_locations with new lowest current_pos
+        jal spawn_column
+        jal sleep
+        jal connection_finder # checks for connections and updates screen if applicable
+        jal sleep
+        j game_loop # Go back to Step 1
+    respond_to_D:
+    	lw $t1, current_pos # param for collision_checker
+    	lw $t2, col_hitbox # param for collision_checker
+    	li $a0, 4 # offset to move right (param for collision_checker)
+    	jal collision_checker # check collision and update location if applicable
+    	jal sleep
+    	j key_loop
+    
     # 2a. Check for collisions
 	# 2b. Update locations (capsules)
 	# 3. Draw the screen
 	# 4. Sleep
 
-    # 5. Go back to Step 1
+    
     j game_loop
     end_game:
-    lw $ra, 0($sp) # Assuming that after every cycle in the game loop that $sp points to where it originally pointed to
-    jr $ra
-
-get_random_column:
-    # Random seed (system time)
-    li $v0, 30 
-    syscall # gets system time $a0 = low 32 bits, $a1 = high 32 bits
-    move $a1, $a0       # Move low 32 bits of time into $a1 (the seed)
-    li $a0, 0           # Set Generator ID to 0
-    li $v0, 40          # Syscall 40: Set Seed
+    li $v0, 10 # terminate the program gracefully
     syscall
 
+get_random_column:
     # Generate color combo
-    la $s0, column
     la $t9, colors
     addi $t6, $t0, 160
     li $t1, 0
@@ -187,17 +282,97 @@ get_random_column:
     jr $ra                          # return statement
     
 spawn_column:
+    li $a0, 0x00000000 # black
+    li $a1, 0x10008084 # min position that doesn't break the game
     li $t1, 0
     li $t2, 3
-    addi $t3, $t0, 4 # column top + 1 block
+    lw $t3, current_pos
+    move $a3, $t3 # copy to $a3 for spawn_end
+    lw $t7, previous_pos
     spawn_loop:
     beq $t1, $t2, spawn_end
     sll $t6, $t1, 2
-    add $t5, $s0, $t6
-    lw $t4, 0($t5)
-    addi $t3, $t3, 128
-    sw $t4, 0($t3)
-    addi $t1, $t1, 1
+    add $t5, $s1, $t6 # color index in colors
+    lw $t4, 0($t5) # get the color
+    addi $t3, $t3, 128 # color in position
+    addi $t7, $t7, 128 # color out position
+    sw $a0, 0($t7) # color out
+    blt $t3, $a1, continue_spawn
+    sw $t4, 0($t3) # color in
+    addi $t1, $t1, 1 # increment
+    j spawn_loop
+    continue_spawn:
+    addi $t1, $t1, 1 # increment
     j spawn_loop
     spawn_end:
+    la $t1, col_hitbox
+    sw $t3, 0($t1) # update hitbox location
+    la $t7, previous_pos
+    sw $a3, 0($t7) # update previous_pos to current_pos
+    jr $ra
+    
+transfer_next_to_col:
+    la $t1, next_column
+    la $t2, column
+    
+    # Copy all 3 elements without loop
+    lw $t3, 0($t1)
+    sw $t3, 0($t2)
+    
+    lw $t3, 4($t1)
+    sw $t3, 4($t2)
+    
+    lw $t3, 8($t1)
+    sw $t3, 8($t2)
+    jr $ra
+    
+collision_checker: 
+# Parameters:
+# $t1 is the current_pos of the column
+# $t2 is the col_hitbox (used to check collision)
+# $a0 to determine whether the intended move is left or right
+    li $a1, 0 # black
+    add $t3, $t2, $a0 # location to the right or left of the hitbox
+    lw $t5, 0($t3) # color right or left of hitbox
+    beq $t5, $a1, no_collision
+    li $a1, 1 # to indicate collision
+    jr $ra
+    no_collision:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    la $t2, current_pos
+    add $t1, $t1, $a0
+    sw $t1, 0($t2) # update current_pos for spawn_column
+    sra $t9, $a0, 2 # divide 4???
+    jal spawn_column
+    la $t2, current_x
+    lw $t1, current_x
+    add $t1, $t1, $t9
+    sw $t1, 0($t2)
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    
+sleep:
+    li $v0, 32
+    li $a0, 15
+    syscall
+    jr $ra
+    
+connection_finder:
+
+    # Reset the pos for new turn
+    la $t1, previous_pos
+    la $t2, current_pos
+    li $a0, 0
+    li $a1, 0x10008004 # default location
+	la $t3, land_locations
+	la $t4, current_x
+	sw $a0, 0($t4) # reset current_x to zero
+	lw $t6, 0($t3) # the lowest possible current_pos in the current_x
+	blt $t6, $a1, it_over
+	sw $a1, 0($t2) # reset current_pos to top-left of playing map
+	sw $a1, 0($t1) # reset previous_pos to top-left of playing map
+	jr $ra
+    it_over:
+    sw $t6, 0($t2) # update current_pos 
     jr $ra
