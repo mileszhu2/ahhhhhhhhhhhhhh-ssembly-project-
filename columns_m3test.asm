@@ -30,8 +30,8 @@ colors: .word 0x00ff0000 # red
         .word 0x0000ff00 # green
         .word 0x000000ff # blue
         .word 0x00ffff00 # yellow
-        .word 0x00ff00ff # magenta
-        .word 0x0000ffff # cyan
+        .word 0x006600ff # purple
+        .word 0x00ff9900 # orange
         
 # for flood fill
 movements: .word 0xffffff80 # up (-128)
@@ -46,7 +46,8 @@ movements: .word 0xffffff80 # up (-128)
 ##############################################################################
 # Mutable Data
 ##############################################################################
-column: .word 0:3
+col_locs: .word 0:3 # locations (initially didn't need this but i found a bug)
+column: .word 0:3 # colors
 next_column: .word 0:3
 current_pos: .word 0x10008004 # position logs the block on top of the column's top block
 current_x: .word 0x00000000 # index of land_locations that corresponds to the current_pos of column
@@ -299,6 +300,7 @@ get_random_column:
     jr $ra                          # return statement
     
 spawn_column:
+    la $s7, col_locs
     li $a0, 0x00000000 # black
     li $a1, 0x10008084 # min position that doesn't break the game
     li $t1, 0
@@ -313,7 +315,21 @@ spawn_column:
     lw $t4, 0($t5) # get the color
     addi $t3, $t3, 128 # color in position
     addi $t7, $t7, 128 # color out position
+    add $t6, $s7, $t6 # index in col_locs
+    sw $t3, 0($t6) # store color in position in col_locs
+    # search previous color in positions
+    li $t6, 0
+    search_col_locs:
+        beq $t6, $t1, color_out # no more previous color in positions and no match
+        sll $t5, $t6, 2
+        add $t8, $s7, $t5 # index in col_locs
+        lw $t8, 0($t8) # color in position in col_locs
+        beq $t7, $t8, skip_to_color_in # don't color out if the square was colored in
+        addi $t6, $t6, 1
+        j search_col_locs
+    color_out:
     sw $a0, 0($t7) # color out
+    skip_to_color_in:
     blt $t3, $a1, continue_spawn
     sw $t4, 0($t3) # color in
     addi $t1, $t1, 1 # increment
