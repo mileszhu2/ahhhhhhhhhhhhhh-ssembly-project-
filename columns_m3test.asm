@@ -30,7 +30,7 @@ colors: .word 0x00ff0000 # red
         .word 0x0000ff00 # green
         .word 0x000000ff # blue
         .word 0x00ffff00 # yellow
-        .word 0x006600ff # purple
+        .word 0x00cc00ff # purple
         .word 0x00ff9900 # orange
         
 # for flood fill
@@ -66,41 +66,9 @@ to_be_deleted: .word 0:84
 
     # Run the game.
 main:
-    # Initialize the game
-    li $t9, 0x808080 #t9=gray
     lw $t0, ADDR_DSPL # $t0 = base address for display
-    
-    # Initialize the input values for the line drawing code.
-    addi $a0, $zero, 0          # set the X coordinate to 0
-    addi $a1, $zero, 0          # set the Y coordinate to 0
-    addi $a2, $zero, 16         # set the length of the line to 16
-    jal vline_draw              # calls the line drawing function
-    
-    addi $a0, $zero, 7          # set the X coordinate to 7
-    addi $a1, $zero, 0          # set the Y coordinate to 0
-    addi $a2, $zero, 16         # set the length of the line to 16
-    jal vline_draw              # calls the line drawing function
-    
-    addi $a0, $zero, 9          # set the X coordinate to 9
-    addi $a1, $zero, 0          # set the Y coordinate to 0
-    addi $a2, $zero, 5          # set the length of the line to 5
-    jal vline_draw              # calls the line drawing function
-    
-    addi $a0, $zero, 7          # set the X coordinate to 7
-    addi $a1, $zero, 4          # set the Y coordinate to 4
-    addi $a2, $zero, 3          # set the length of the line to 3
-    jal hline_draw              # calls the line drawing function
-    
-    addi $a0, $zero, 0          # set the X coordinate to 0
-    addi $a1, $zero, 0          # set the Y coordinate to 0
-    addi $a2, $zero, 10         # set the length of the line to 10
-    jal hline_draw              # calls the line drawing function
-    
-    addi $a0, $zero, 0          # set the X coordinate to 0
-    addi $a1, $zero, 15         # set the Y coordinate to 15
-    addi $a2, $zero, 8          # set the length of the line to 8
-    jal hline_draw              # calls the line drawing function
-    
+    jal draw_game
+
     # Initialize columns:
     la $s0, next_column
     la $s1, column
@@ -124,52 +92,6 @@ main:
     jal get_random_column
     jal game_loop
     
-    ###
-    ###  Code for drawing a horizontal/vertical line.
-    ###
-    ###  $t0 = location of the top-left corner of the bitmap
-    ###  $a0 = the X coordinate of the start of the line
-    ###  $a1 = the Y coordinate of the start of the line
-    ###  $a2 = the length of the line
-    ###  $t1 = the horizontal offset to add to $t0
-    ###  $t2 = the vertical offset to add to $t0
-    ###  $t3 = the current location in memory of the pixel to draw
-    ###  $t4 = the location of the last pixel in the line
-    
-    hline_draw:
-    sll $t2, $a1, 7                 # Calculate the vertical offset (multiply Y input by 128)
-    sll $t1, $a0, 2                 # Calculate the horizontal offset (multiply X input by 4)
-    add $t3, $t0, $t2               # Add the vertical offset to $t0
-    add $t3, $t3, $t1               # Add the horizontal offset to the location calculated above
-    
-    sll $a2, $a2, 2                 # Calculate the offset from $t3 for the last pixel in the line (multiply $a2 by 4)
-    add $t4, $t3, $a2               # Calculate the position of the last pixel in the line
-    # start of the line-drawing loop
-    hline_loop:
-    beq $t3, $t4, hline_loop_end    # If the current X and Y match the end location of the line, branch out of the loop.
-    sw $t9, 0($t3)                  # Draw a single gray pixel at the current X and Y
-    addi $t3, $t3, 4                # Move to the next pixel in the row
-    j hline_loop                    # Jump to the start of the loop
-    hline_loop_end:
-    jr $ra                          # return statement
-    
-    vline_draw:
-    sll $t2, $a1, 7                 # Calculate the vertical offset (multiply Y input by 128)
-    sll $t1, $a0, 2                 # Calculate the horizontal offset (multiply X input by 4)
-    add $t3, $t0, $t2               # Add the vertical offset to $t0
-    add $t3, $t3, $t1               # Add the horizontal offset to the location calculated above
-    
-    sll $a2, $a2, 7                 # Calculate the offset from $t3 for the last pixel in the line (multiply $a2 by 128)
-    add $t4, $t3, $a2               # Calculate the position of the last pixel in the line
-    # start of the line-drawing loop
-    vline_loop:
-    beq $t3, $t4, hline_loop_end    # If the current X and Y match the end location of the line, branch out of the loop.
-    sw $t9, 0($t3)                  # Draw a single gray pixel at the current X and Y
-    addi $t3, $t3, 128              # Move to the next pixel in the column
-    j vline_loop                    # Jump to the start of the loop
-    vline_loop_end:
-    jr $ra                          # return statement
-
 game_loop:
     # New column turn setup
     jal transfer_next_to_col
@@ -261,17 +183,100 @@ game_loop:
     	jal collision_checker # check collision and update location if applicable
     	jal sleep
     	j key_loop
-    
-    # 2a. Check for collisions
-	# 2b. Update locations (capsules)
-	# 3. Draw the screen
-	# 4. Sleep
 
-    
     j game_loop
     end_game:
     li $v0, 10 # terminate the program gracefully
     syscall
+
+
+
+    ###
+    ###  Code for drawing a horizontal/vertical line.
+    ###
+    ###  $t0 = location of the top-left corner of the bitmap
+    ###  $a0 = the X coordinate of the start of the line
+    ###  $a1 = the Y coordinate of the start of the line
+    ###  $a2 = the length of the line
+    ###  $t1 = the horizontal offset to add to $t0
+    ###  $t2 = the vertical offset to add to $t0
+    ###  $t3 = the current location in memory of the pixel to draw
+    ###  $t4 = the location of the last pixel in the line
+    
+    hline_draw:
+    sll $t2, $a1, 7                 # Calculate the vertical offset (multiply Y input by 128)
+    sll $t1, $a0, 2                 # Calculate the horizontal offset (multiply X input by 4)
+    add $t3, $t0, $t2               # Add the vertical offset to $t0
+    add $t3, $t3, $t1               # Add the horizontal offset to the location calculated above
+    
+    sll $a2, $a2, 2                 # Calculate the offset from $t3 for the last pixel in the line (multiply $a2 by 4)
+    add $t4, $t3, $a2               # Calculate the position of the last pixel in the line
+    # start of the line-drawing loop
+    hline_loop:
+    beq $t3, $t4, hline_loop_end    # If the current X and Y match the end location of the line, branch out of the loop.
+    sw $t9, 0($t3)                  # Draw a single gray pixel at the current X and Y
+    addi $t3, $t3, 4                # Move to the next pixel in the row
+    j hline_loop                    # Jump to the start of the loop
+    hline_loop_end:
+    jr $ra                          # return statement
+    
+    vline_draw:
+    sll $t2, $a1, 7                 # Calculate the vertical offset (multiply Y input by 128)
+    sll $t1, $a0, 2                 # Calculate the horizontal offset (multiply X input by 4)
+    add $t3, $t0, $t2               # Add the vertical offset to $t0
+    add $t3, $t3, $t1               # Add the horizontal offset to the location calculated above
+    
+    sll $a2, $a2, 7                 # Calculate the offset from $t3 for the last pixel in the line (multiply $a2 by 128)
+    add $t4, $t3, $a2               # Calculate the position of the last pixel in the line
+    # start of the line-drawing loop
+    vline_loop:
+    beq $t3, $t4, hline_loop_end    # If the current X and Y match the end location of the line, branch out of the loop.
+    sw $t9, 0($t3)                  # Draw a single gray pixel at the current X and Y
+    addi $t3, $t3, 128              # Move to the next pixel in the column
+    j vline_loop                    # Jump to the start of the loop
+    vline_loop_end:
+    jr $ra                          # return statement
+
+draw_game:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    li $t9, 0x808080 #t9=gray
+    
+    # Initialize the input values for the line drawing code.
+    addi $a0, $zero, 0          # set the X coordinate to 0
+    addi $a1, $zero, 0          # set the Y coordinate to 0
+    addi $a2, $zero, 16         # set the length of the line to 16
+    jal vline_draw              # calls the line drawing function
+    
+    addi $a0, $zero, 7          # set the X coordinate to 7
+    addi $a1, $zero, 0          # set the Y coordinate to 0
+    addi $a2, $zero, 16         # set the length of the line to 16
+    jal vline_draw              # calls the line drawing function
+    
+    addi $a0, $zero, 9          # set the X coordinate to 9
+    addi $a1, $zero, 0          # set the Y coordinate to 0
+    addi $a2, $zero, 5          # set the length of the line to 5
+    jal vline_draw              # calls the line drawing function
+    
+    addi $a0, $zero, 7          # set the X coordinate to 7
+    addi $a1, $zero, 4          # set the Y coordinate to 4
+    addi $a2, $zero, 3          # set the length of the line to 3
+    jal hline_draw              # calls the line drawing function
+    
+    addi $a0, $zero, 0          # set the X coordinate to 0
+    addi $a1, $zero, 0          # set the Y coordinate to 0
+    addi $a2, $zero, 10         # set the length of the line to 10
+    jal hline_draw              # calls the line drawing function
+    
+    addi $a0, $zero, 0          # set the X coordinate to 0
+    addi $a1, $zero, 15         # set the Y coordinate to 15
+    addi $a2, $zero, 8          # set the length of the line to 8
+    jal hline_draw              # calls the line drawing function
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
 
 get_random_column:
     # Generate color combo
@@ -445,8 +450,10 @@ connection_finder:
             add $t4, $t1, $t2
             lw $t5, 0($t4) # get the location
             beq $t5, 0, paint_black_done # no more to search
+            blt $t5, 0x10008084, skip_paint # invalid location
             sw $t9, 0($t5) # paint black
             jal sleep
+            skip_paint:
             add $t2, $t2, 4 # increment
             j paint_black
         paint_black_done:
@@ -456,21 +463,33 @@ connection_finder:
             add $t4, $t1, $t2
             lw $t5, 0($t4) # get the location
             beq $t5, 0, do_we_continue # no more to search
-            move $t7, $t5
+            
+            sub $t6, $t5, $t0 # $t6 = $t5 - $t0
+            addi $t6, $t6, -4 # substract 4
+            sra $t4, $t6, 7 # divide by 128 and throw out remainder
+            sll $t4, $t4, 7 # multiply $t4 by 128
+            sub $t6, $t6, $t4 # $t6 - $t4 is the remainder and also the index
+            add $v1, $t8, $t6 # candidates location
+            lw $t6, 0($v1)
+            blt $t5, $t6, pos_adjust
+            move $t6, $t5
+            j pos_adjust_end
+            pos_adjust:
+            add $t6, $t5, 128 # adjust the position
+            pos_adjust_end:
+            move $t7, $t6
             drop_loop_up:
                 # check current column (loop bottom up till see black or grey)
                 addi $t6, $t7, -128 # move up previous $t7
                 lw $t4, 0($t6) # target color
-                sw $t9, 0($t6) # color above black
                 beq $t4, 0x808080, drop_exit # if $t4 is grey
-                beq $t4, 0, drop_exit # if $t4 is black
+                sw $t9, 0($t6) # color above black
+                # beq $t4, 0, drop_exit # if $t4 is black
                 sw $t4, 0($t7) # color current black pixel the above color (which is not black)
                 jal sleep
                 move $t7, $t6 # $t6 is the previous now
                 j drop_loop_up
             drop_exit:
-            move $t7, $t6
-            addi $t7, $t7, -256 # adjust to current_pos like in land_locations (already -128 in the drop_loop_up)
             la $v0, land_locations
             sub $t6, $t5, $t0 # $t6 = $t5 - $t0
             addi $t6, $t6, -4 # substract 4
@@ -479,9 +498,8 @@ connection_finder:
             sub $t6, $t6, $t4 # $t6 - $t4 is the remainder and also the index
             add $v0, $v0, $t6 # land_locations index
             lw $t4, 0($v0) # load the current land_location
-            ble $t7, $t4, skip_ll
-            sw $t7, 0($v0) # update land_locations
-            skip_ll:
+            addi $t4, $t4, 128
+            sw $t4, 0($v0)
             add $v1, $t8, $t6 # candidates location
             lw $t7, 0($v1)
             ble $t5, $t7, skip_replace
@@ -633,10 +651,22 @@ transfer_candidates:
         add $v0, $v1, $t6
         lw $t7, 0($v0) # load candidate
         beq $t7, 0, done_transfer # no more candidates
-        sw $t7, 0($a1) # store in to_be_deleted
-        add $a1, $a1, 4 # increment pointer for to_be_deleted
-        add $t6, $t6, 4 # increment
-        j transfer_loop
+        li $t8, 0 # duplicate check index
+        la $s7, to_be_deleted
+        duplicate_check_loop2:
+            beq $t8, 336, done_duplicate_check2 # 84*4 = 336
+            add $s6, $s7, $t8
+            lw $v0, 0($s6) # load value in to_be_deleted
+            beq $v0, 0, no_duplicate2 # no more values
+            beq $v0, $t7, done_duplicate_check2 # found a duplicate
+            add $t8, $t8, 4 # increment
+            j duplicate_check_loop2
+        no_duplicate2:
+            sw $t7, 0($a1) # store in to_be_deleted
+            add $a1, $a1, 4 # increment pointer for to_be_deleted
+        done_duplicate_check2:
+            add $t6, $t6, 4 # increment
+            j transfer_loop
     done_transfer:
     jr $ra
 
