@@ -221,15 +221,17 @@ game_loop:
         beq $a0, 0x61, respond_to_A     # Check if the key a was pressed
         beq $a0, 0x73, respond_to_S     # Check if the key s was pressed
         beq $a0, 0x64, respond_to_D     # Check if the key d was pressed
-        beq $a0, 0x70, pause_loop       # Pause menu (if p was pressed)
+        beq $a0, 0x70, pauseloop       # Pause menu (if p was pressed)
         li $v0, 1                       # ask system to print $a0
         syscall
         b key_loop
     
     respond_to_Q:
+        jal boom
     	j end_game
     	
     respond_to_W:
+        jal boom
     	li $t1, 0
         li $t2, 3
         lw $t4, 8($s1)
@@ -247,6 +249,7 @@ game_loop:
         jal sleep
         j key_loop
     respond_to_A:
+        jal boom
         jal clear_land_indicator
     	lw $t1, current_pos # param for collision_checker
     	lw $t2, col_hitbox # param for collision_checker
@@ -255,6 +258,7 @@ game_loop:
     	jal sleep
     	j key_loop
     respond_to_S: 
+        jal boom
         # This is done assuming the game over check at the start of game_loop actually works
         # This implies that in this postion, the down move is valid and won't lose you the game
         # well it actually only checks the leftmost land_location but I'm counting on A and D moves to take care of the other locations
@@ -278,6 +282,7 @@ game_loop:
         jal sleep
         j game_loop # Go back to Step 1
     respond_to_D:
+        jal boom
         jal clear_land_indicator
     	lw $t1, current_pos # param for collision_checker
     	lw $t2, col_hitbox # param for collision_checker
@@ -286,6 +291,8 @@ game_loop:
     	jal sleep
     	j key_loop
     	
+    pauseloop:
+    jal boom
     pause_loop:
         # Check if a key is available
         li $t0, 0xFFFF0000      # receiver control
@@ -1142,6 +1149,7 @@ flash_title:
     jr $ra
     
 draw_easy:
+    jal boom
     lw $t0, ADDR_DSPL
     li $t1, 0xffffff      # make $t1 white
     sw $t1, 264($t0)
@@ -1251,6 +1259,7 @@ draw_easy:
     jr $ra
 
 draw_medium:
+    jal boom
     lw $t0, ADDR_DSPL
     li $t1, 0xffffff      # make $t1 white
     
@@ -1387,6 +1396,7 @@ draw_medium:
     jr $ra
     
 draw_hard:
+    jal boom
     lw $t0, ADDR_DSPL
     li $t1, 0xffffff      # make $t1 white
     
@@ -1500,6 +1510,7 @@ draw_hard:
     jr $ra
     
 draw_tony:
+    jal boom
     lw $t0, ADDR_DSPL
     li $t1, 0xffffff      # make $t1 white
     
@@ -1897,6 +1908,7 @@ flash_end_screen:
     jr $ra
     
 menu_chosen:
+    jal boom
     lw $t0, ADDR_DSPL
     li $t1, 0xffffff      # make $t1 white
 
@@ -2154,6 +2166,7 @@ menu_chosen:
     j main
 
 quit_chosen:
+    jal boom
     lw $t0, ADDR_DSPL
     li $t1, 0xffffff      # make $t1 white
     
@@ -2486,6 +2499,7 @@ clear_pause_menu:
     jr $ra
     
 unpause:
+    jal boom
     jal clear_pause_menu
     
     lw $t0, ADDR_DSPL
@@ -2557,6 +2571,7 @@ unpause:
     j key_loop
     
 quit_from_pause:
+    jal boom
     jal clear_pause_menu
     
     lw $t0, ADDR_DSPL
@@ -2626,5 +2641,43 @@ flash_pause:
     sw $t1, 2348($t0)
     sw $t1, 2352($t0)
     sw $t1, 2484($t0)
+    
+    jr $ra
+    
+boom:
+    li   $v0, 31
+    li   $a0, 30
+    li   $a1, 1000
+    li   $a2, 127
+    li   $a3, 128
+    syscall
+    
+    li   $v0, 31
+    li   $a0, 30
+    li   $a1, 1000
+    li   $a2, 127
+    li   $a3, 128
+    syscall
+    
+    li   $v0, 31
+    li   $a0, 30
+    li   $a1, 1000
+    li   $a2, 127
+    li   $a3, 128
+    syscall
+    
+    li   $v0, 31
+    li   $a0, 50
+    li   $a1, 1000
+    li   $a2, 127
+    li   $a3, 128
+    syscall
+    
+    li   $v0, 31
+    li   $a0, 70
+    li   $a1, 1000
+    li   $a2, 127
+    li   $a3, 128
+    syscall
     
     jr $ra
