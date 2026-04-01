@@ -54,6 +54,7 @@ movements: .word 0xffffff80 # up (-128)
 # Mutable Data
 ##############################################################################
 last_update: .word 0
+land_color: .word 0x00ffffff # white
 gravity_speed: .word 0 # gravity speed
 col_locs: .word 0:3 # locations (initially didn't need this but i found a bug)
 column: .word 0:3 # colors
@@ -167,6 +168,30 @@ game_loop:
     	lw $t2, col_hitbox # param for collision_checker
     	li $a0, 128 # offset to move right (param for collision_checker)
     	jal collision_checker # check collision and update location if applicable
+    	
+    li $t1, 0 # index
+    # find the land location again
+    lw $t2, current_x
+	la $t3, land_locations
+	sll $t2, $t2, 2
+	add $t3, $t3, $t2
+	lw $t3, 0($t3)
+    landing_loop:
+        add $t3, $t3, 128
+        lw $t2, 0($t3)
+        beq $t2, 0x00ffffff, remove_white
+        beq $t2, 0, add_white
+        j after_color_land
+        add_white:
+        li $a0, 0x00ffffff
+        sw $a0, 0($t3)
+        j after_color_land
+        remove_white:
+        li $a0, 0
+        sw $a0, 0($t3)
+        after_color_land:
+        addi $t1, $t1, 1
+        blt $t1, 3, landing_loop
     
     # Reset timer
     li $v0, 30
@@ -209,6 +234,7 @@ game_loop:
         jal sleep
         j key_loop
     respond_to_A:
+        jal clear_land_indicator
     	lw $t1, current_pos # param for collision_checker
     	lw $t2, col_hitbox # param for collision_checker
     	li $a0, -4 # offset to move left (param for collision_checker)
@@ -239,6 +265,7 @@ game_loop:
         jal sleep
         j game_loop # Go back to Step 1
     respond_to_D:
+        jal clear_land_indicator
     	lw $t1, current_pos # param for collision_checker
     	lw $t2, col_hitbox # param for collision_checker
     	li $a0, 4 # offset to move right (param for collision_checker)
@@ -455,6 +482,23 @@ transfer_next_to_col:
     
     lw $t3, 8($t1)
     sw $t3, 8($t2)
+    jr $ra
+    
+# clear the landing indicator
+clear_land_indicator:
+	li $t1, 0 # index
+    # find the land location again
+    lw $t2, current_x
+	la $t3, land_locations
+	sll $t2, $t2, 2
+	add $t3, $t3, $t2
+	lw $t3, 0($t3)
+    clear_landing_loop:
+    add $t3, $t3, 128
+    li $a0, 0
+    sw $a0, 0($t3)
+    addi $t1, $t1, 1
+    blt $t1, 3, clear_landing_loop
     jr $ra
     
 collision_checker: 
