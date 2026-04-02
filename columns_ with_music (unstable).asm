@@ -1838,8 +1838,21 @@ draw_tony:
     sw $t1, 1704($t0)
     sw $t1, 1716($t0)
     sw $t1, 1728($t0)
-
-	sw $t1, 2056($t0)
+    
+    # sleep for a second
+    li $t9, 0
+    tony_sleep_loop1:
+    beq $t9, 20, tony_pt2
+    jal music_loop
+    # sleep 50 ms (16th note)
+    li $v0, 32
+    lw $a0, length_of_16th
+    syscall
+    add $t9, $t9, 1
+    j tony_sleep_loop1
+    
+    tony_pt2:
+    sw $t1, 2056($t0)
     sw $t1, 2060($t0)
     sw $t1, 2064($t0)
     sw $t1, 2072($t0)
@@ -1888,6 +1901,9 @@ draw_tony:
     la $t0, gravity_speed
     sw $zero, 0($t0)
     
+    # Extra dramatic boom
+    jal boom
+    
     # overwrite the colours.
     set_colors2:
         la $t0, used_colors   # destination
@@ -1903,17 +1919,17 @@ draw_tony:
         addi $t2, $t2, -1
         bgtz $t2, copy_loop
     
-    # sleep for two second
+    # sleep for a second
     li $t9, 0
-    tony_sleep_loop:
-    beq $t9, 40, tony_finish
+    tony_sleep_loop2:
+    beq $t9, 20, tony_finish
     jal music_loop
     # sleep 50 ms (16th note)
     li $v0, 32
     lw $a0, length_of_16th
     syscall
     add $t9, $t9, 1
-    j tony_sleep_loop
+    j tony_sleep_loop2
     
     tony_finish:
     lw $ra, 0($sp)
