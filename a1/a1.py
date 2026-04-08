@@ -9,12 +9,12 @@ import random
 # Directions dx, dy
 LEFT = (-1, 0)
 RIGHT = (1, 0)
-UP = (0, 1)
-DOWN = (0, -1)
-TOPLEFT = (-1, 1)
-TOPRIGHT = (1, 1)
-BOTLEFT = (-1, -1)
-BOTRIGHT = (1, -1)
+UP = (0, -1)
+DOWN = (0, 1)
+TOPLEFT = (-1, -1)
+TOPRIGHT = (1, -1)
+BOTLEFT = (-1, 1)
+BOTRIGHT = (1, 1)
 DIRECTIONS = [LEFT, RIGHT, UP, DOWN, TOPLEFT, BOTRIGHT, BOTLEFT, TOPRIGHT]
 
 
@@ -48,7 +48,7 @@ class GameBoard:
     turns: int
     width: int
     height: int
-    difficulty: str | None
+    animate: bool
     _player: Player | None
     _board: list[list[list[Character]]]
     _land_locations: list[int] | None # for player
@@ -75,7 +75,8 @@ class GameBoard:
         self.width = w
         self.height = h
 
-        self.difficulty = None
+        self.animate = False
+
         self._player = None
 
         self._board = [[[] for i in range(w)] for j in range(h)]
@@ -259,7 +260,6 @@ class GameBoard:
         turn = self._player.take_turn()
         if turn:
             self.turns += 1  # PROVIDED, DO NOT CHANGE
-            print(self.turns)
             self.check_game_ended()  # PROVIDED, DO NOT CHANGE
 
     def handle_event(self, event: str) -> None:
@@ -445,6 +445,12 @@ class Player:
             self._find_connection(self._to_check)
             return self.landed
 
+        if self._last_event == "gravity" and not self.landed:
+            success = self.move(DOWN)
+            if not success:
+                self.land()
+            self._last_event = None
+
         if self._last_event == "w":
             self.shuffle()
             self._last_event = None
@@ -509,13 +515,14 @@ class Player:
     def land(self) -> None:
         x = self._col_hitbox[0]
         new_y = self.board.get_land_location(x-1) # account for list index
+        if not (self.board.on_board(x, new_y)):
+            return
         if new_y < self._col_hitbox[1]:
             return
         if (self.board.at(x, new_y) and not
         self.col[0] == self.board.at(x, new_y)[0]):
             return
-        if (self.board.on_board(x, new_y) and
-                self.board.on_board(x, new_y-1) and
+        if (self.board.on_board(x, new_y-1) and
                 self.board.on_board(x, new_y-2)):
             self.board.update_pos(x, new_y, self.col[0])
             self.board.update_pos(x, new_y-1, self.col[1])
@@ -552,6 +559,8 @@ class Player:
             y = (xy - x) // 128
             locations.append((x, y))
             update.append((x, y))
+            self.board.remove_character(x, y)
+            character_factory('L', self.board, x, y)
             y += -1
             c = self.board.at(x, y)
             while y != 1 and c:
@@ -565,6 +574,9 @@ class Player:
         self._to_update = update
         if not locations:
             self.landed = True
+            self.board.animate = False
+        else:
+            self.board.animate = True
         return connections
 
     def _update_game(self) -> None:
@@ -642,6 +654,14 @@ class Dark(Character):
         return "D"
 
 
+class Light(Character):
+    def move(self, direction: tuple[int, int]) -> bool:
+        return False
+
+    def get_symbol(self) -> str:
+        return "L"
+
+
 class Boundary(Character):
     def move(self, direction: tuple[int, int]) -> bool:
         return False
@@ -671,6 +691,8 @@ def character_factory(symbol: str, b: GameBoard, x: int, y: int) -> Character:
         return Purple(b, x, y)
     elif symbol == "D":
         return Dark(b, x, y)
+    elif symbol == "L":
+        return Light(b, x, y)
     elif symbol == "Z":
         return Boundary(b, x, y)
     elif symbol == "W":
