@@ -45,28 +45,6 @@ def make_image(icon_file: str, width: int, height: int) -> pygame.surface:
     return pygame.transform.scale(pic, (width, height))
 
 
-def menu_screen(difficulty: str) -> str:
-    """
-    Displays the Menu Screen for Easy, Medium, Hard difficulties.
-    """
-
-    for event in pygame.event.get():
-        # Stop if user closed the window.
-        if event.type == pygame.constants.QUIT:
-            sys.exit()
-        if event.type == pygame.constants.KEYDOWN:
-            if event.key == pygame.constants.K_e:
-                difficulty = "e"
-            if event.key == pygame.constants.K_m:
-                difficulty = "m"
-            if event.key == pygame.constants.K_h:
-                difficulty = "h"
-            if event.key == pygame.constants.K_t:
-                difficulty = "t"
-
-    return difficulty
-
-
 class ColumnsGame:
     """The user interface for the Columns game!
 
@@ -150,19 +128,37 @@ class ColumnsGame:
         # Update the screen.
         pygame.display.flip()
 
+    def draw_blank(self) -> None:
+        """
+        Blank screen.
+        """
+        board = constants.BLANK
+        self._board.set_board(board, False)
+        self.draw()
+
     def draw_menu(self) -> None:
         """
         Draw the game over screen.
         """
         board = constants.MENU
         self._board.set_board(board)
+        self.draw()
+
+    def flash_menu(self) -> None:
+        """
+        Menu flash animation.
+        """
+        board = constants.MENU2
+        self._board.set_board(board, False)
+        self.draw()
 
     def draw_game(self) -> None:
         """
         Draw the game over screen.
         """
         board = constants.GAME
-        self._board.set_board(board)
+        self._board.set_board(board, True)
+        self.draw()
 
     def draw_end(self) -> None:
         """
@@ -173,11 +169,20 @@ class ColumnsGame:
         """
         Play the game!
         """
-        # self.draw_menu()
+        self.draw_menu()
+        counter = 0
         while difficulty == "":
-            difficulty = menu_screen(difficulty)
+            if counter == 5:
+                self.flash_menu()
+            if counter == 10:
+                self.draw_menu()
+                counter = 0
+            pygame.time.wait(100)
+            counter += 1
+            difficulty = self.menu_screen(difficulty)
 
         self._board.difficulty = difficulty
+        self.draw_blank()
         self.draw_game()
 
         while not self._board.ended:
@@ -223,6 +228,36 @@ class ColumnsGame:
             # Give every character a turn in the game and draw the board.
         self._board.give_turns()
         self.draw()
+
+    def menu_screen(self, difficulty: str) -> str:
+        """
+        Displays the Menu Screen for Easy, Medium, Hard difficulties.
+        """
+
+        for event in pygame.event.get():
+            # Stop if user closed the window.
+            if event.type == pygame.constants.QUIT:
+                sys.exit()
+            if event.type == pygame.constants.KEYDOWN:
+                if event.key == pygame.constants.K_e:
+                    difficulty = "e"
+                    self._board.set_board(constants.EASY, False)
+                    self.draw()
+                    pygame.time.wait(2000)
+                if event.key == pygame.constants.K_m:
+                    difficulty = "m"
+                    self._board.set_board(constants.MEDIUM, False)
+                    self.draw()
+                    pygame.time.wait(2000)
+                if event.key == pygame.constants.K_h:
+                    difficulty = "h"
+                    self._board.set_board(constants.HARD, False)
+                    self.draw()
+                    pygame.time.wait(2000)
+                if event.key == pygame.constants.K_t:
+                    difficulty = "t"
+
+        return difficulty
 
 
 if __name__ == '__main__':

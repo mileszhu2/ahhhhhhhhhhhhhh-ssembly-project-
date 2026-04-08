@@ -76,6 +76,7 @@ class GameBoard:
         self.height = h
 
         self.difficulty = None
+        self._player = None
 
         self._board = [[[] for i in range(w)] for j in range(h)]
 
@@ -84,15 +85,20 @@ class GameBoard:
             if isinstance(land_height, int):
                 self._land_locations= [land_height for i in range(6)]
 
-        self._player = Player(self)
-
-    def set_board(self, board: list[list[list[str]]]) -> None:
+    def set_board(self, board: list[list[list[str]]], *args) -> None:
         """Set the board to a preconfigured one.
         Preconditions:
         - len(board) = self.height
         - len(board[0]) = self.width
         - each string is a symbol of a valid character
         """
+        clear = False
+        if args:
+            if isinstance(args[0], bool):
+                if args[0]:
+                    self._player = Player(self)
+                else:
+                    clear = True
         for i in range(len(board)):
             row = board[i]
             for j in range(len(row)):
@@ -100,6 +106,9 @@ class GameBoard:
                 if character:
                     symbol = character[0]
                     character_factory(symbol, self, j, i)
+                else:
+                    if clear:
+                        self._board[i][j] = []
 
     def get_land_location(self, index: int) -> int:
         if not self._land_locations:
@@ -491,15 +500,19 @@ class Player:
             self.board.update_pos(x, new_y-1, self.col[1])
             self.board.update_pos(x, new_y-2, self.col[2])
             self.board.update_land_location(x-1, new_y-3)
-            self._find_connection(list(self.col[:]))
+            locations = [(self.col[0].x, self.col[0].y),
+                         (self.col[1].x, self.col[1].y),
+                         (self.col[2].x, self.col[2].y)]
+            self._find_connection(locations)
             self.landed = True
 
-    def _find_connection(self, targets: list[Character]) -> None:
+    def _find_connection(self, targets: list[tuple[int, int]]) -> None:
         connections = []
-        for character in targets:
-            root_x = character.x
-            root_y = character.y
-            root_color = character.get_symbol()
+        for root_x, root_y in targets:
+            character = self.board.at(root_x, root_y)
+            if not character:
+                continue
+            root_color = character[0].get_symbol()
             for i in range(4):
                 connection = []
                 i = 2 * i
@@ -512,12 +525,12 @@ class Player:
                         if xy not in connections:
                             connections.append(xy)
 
-        characters = []
+        locations = []
         connections.sort() # lowest to highest numbers
         for xy in connections:
             x = xy % 128
             y = (xy - x) // 128
-            characters.append(self.board.at(x, y)[0])
+            locations.append((x, y))
             self.board.remove_character(x, y)
             y += -1
             c = self.board.at(x, y)
@@ -527,8 +540,8 @@ class Player:
                 c = self.board.at(x, y)
             current_ll = self.board.get_land_location(x-1)
             self.board.update_land_location(x-1, current_ll + 1)
-        if characters:
-            self._find_connection(characters)
+        if locations:
+            self._find_connection(locations)
 
     def _flood_fill(self, x: int, y: int, color: str,
                    connection: list[int], direction: tuple[int, int]) -> None:
